@@ -10,7 +10,7 @@ E = $(SO_EXT)
 all: comp_poly.$(E)
 
 install: comp_poly.$(E) comp_poly.dlm
-        mkdir -p $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)
+	mkdir -p $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)
 	cp -p $^ $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)/
 
 .c.o:

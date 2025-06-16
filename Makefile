@@ -1,4 +1,4 @@
-DLMS = fmedian
+DLMS = fmedian comp_poly
 EXPORT_DIR = $(HOME)/sb/ftp-area/dlm
 
 all:
