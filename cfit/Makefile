@@ -7,9 +7,9 @@ FFLAGS          = -c
 E = $(SO_EXT)
 .SUFFIXES: .$(E)
 
-all: fmedian.$(E)
+all: comp_poly.$(E)
 
-install: fmedian.$(E) fmedian.dlm
+install: comp_poly.$(E) comp_poly.dlm
         mkdir -p $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)
 	cp -p $^ $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)/
 
@@ -19,6 +19,6 @@ install: fmedian.$(E) fmedian.dlm
 .o.$(E): 
 	$(LD) $(X_LD_FLAGS) -o $@ $?
 
-fmedian.o: fmedian.c
+comp_poly.o: comp_poly.c
 
 include ../Makefile.etc
