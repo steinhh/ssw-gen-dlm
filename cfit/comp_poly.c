@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "/Applications/NV5/idl91/external/include/idl_export.h"
 
 #define MASK 1 /* Enable/disable keyword mask */
@@ -20,16 +21,6 @@ static void info(char *msg)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-/* Quicksort-based (partitioning) k'th element finder
-   Based on http://www.mathcs.carleton.edu/courses/course_resources/
-   cs227_w96/swanjorg/algorithms.html
-
-   INPUTS:
-   A - Array with data (N elements)
-   K - The number of the element to be found
-   N - The number of elements in A
-*/
-
 #define SWAP(a, b) (atemp = a, a = b, b = atemp)
 
 #define COMP_POLY_CORE(TYPE, VAR_VALUE_FIELD, ALWAYS)                                                                  \
@@ -39,7 +30,7 @@ static void info(char *msg)
     TYPE *workspace = (TYPE *) Workspace->value.arr->data;                                                             \
   }
 
-#define NO_STRUCT_DEF
+#define NO_STRUCT_DEF 0
 
 void assert_numeric(const char *description, IDL_VPTR arg)
 {
@@ -49,59 +40,68 @@ void assert_numeric(const char *description, IDL_VPTR arg)
     char msg[256];
     snprintf(msg, sizeof(msg), "%s must be numeric", description);
     bailout(msg);
-  } else {
-    snprintf(msg, sizeof(msg), "%s is numeric", description);
-    info(msg);
   }
 }
 
 /*; Use         : COMP_POLY,X,A,F [,PDER]*/
 static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
-  assert_numeric("X (1st arg)", Argv[0]);
-  assert_numeric("A (coefficients)", Argv[1]);
   IDL_ENSURE_ARRAY(Argv[0]); /* Ensure X is an array */
   IDL_ENSURE_ARRAY(Argv[1]); /* Ensure A is an array */
+  if (Argv[1]->value.arr->n_dim != 1) {
+    bailout("A (coefficients) must be a 1-dimensional array");
+  }
+  assert_numeric("X (1st arg)", Argv[0]);
+  assert_numeric("A (coefficients)", Argv[1]);
 
-  IDL_VPTR x = IDL_BasicTypeConversion(1, Argv, IDL_TYP_DOUBLE);     /* Input array */
-  IDL_VPTR a = IDL_BasicTypeConversion(1, Argv + 1, IDL_TYP_DOUBLE); /* Coefficients */
+  IDL_VPTR x = IDL_CvtDbl(1, Argv);     /* Input array */
+  IDL_VPTR a = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
 
-  // IDL_VPTR f = Argv[2]; /* Output array */
-  // IDL_VPTR pder = argc > 3 ? Argv[3] : NULL;                         /* Partial derivatives, optional */
-  // IDL_VPTR Workspace;
+  IDL_VPTR f = Argv[2];                      /* Output array */
+  IDL_VPTR pder = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
-  // info("Got here 1");
-  // if (a->value.arr->n_dim != 1) {
-  //   bailout("A (coefficients) must be a 1-dimensional array");
-  // }
-  // info("Got here 2");
-  // IDL_VarCopy(x, f); /* Copy x to res */
-  // info("Got here 3");
-  // // x and a may be temp variables due to type conversion, delete if so
-  // // The IDL_DELTMP macro checks, does not hurt non-temp variables:
-  IDL_DELTMP(x);
-  info("Got here 4");
-  IDL_DELTMP(a);
-  info("Got here 5");
+  IDL_VPTR tmp;
 
-  // IDL_VarMakeTempFromTemplate(x, x->type, NO_STRUCT_DEF, &f, FALSE);
+  // Make F output array, first temporary then make permanent with IDL_VarCopy
+  IDL_VarMakeTempFromTemplate(x, x->type, NO_STRUCT_DEF, &tmp, FALSE);
+  IDL_VarCopy(tmp, f);
 
-  /* Make workspace: */
-  // IDL_MakeTempVector(a->type, b->value.l * c->value.l, IDL_ARR_INI_NOP, &Workspace);
+  IDL_MEMINT pder_dim[2];
+  IDL_MEMINT x_elements = x->value.arr->n_elts;
+  IDL_MEMINT a_coefficients = a->value.arr->n_elts;
+  if (pder) {
+    pder_dim[0] = x->value.arr->n_elts; // Number of elements in x
+    pder_dim[1] = a->value.arr->n_elts; // Number of coefficients in a
+    IDL_MakeTempArray(IDL_TYP_DOUBLE, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
+    IDL_VarCopy(tmp, pder);
+  }
 
-  // if (a != Argv[0])
-  //   IDL_DELTMP(a);
-  // if (b != Argv[1])
-  //   IDL_DELTMP(b);
-  // if (c != Argv[2])
-  //   IDL_DELTMP(c);
-  // IDL_DELTMP(Workspace);
+  double *x_data = (void *) x->value.arr->data;
+  double *a_data = (void *) a->value.arr->data;
+  double *f_data = (void *) f->value.arr->data;
+  double *pder_data = NULL;
+  if (pder) {
+    pder_data = (void *) pder->value.arr->data;
+  }
+
+  for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
+    f_data[xindex] = 0.0;
+    for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
+      f_data[xindex] += a_data[aindex] * pow(x_data[xindex], aindex);
+      if (pder) {
+        // \frac{\dell }{\dell C} C * x^j  = x^j
+        pder_data[xindex + aindex * pder_dim[0]] = pow(x_data[xindex], aindex);
+      }
+      // These might be temp. due to type conversion
+      IDL_DELTMP(x);
+      IDL_DELTMP(a);
+    }
+  }
 }
 
 int IDL_Load(void)
 {
   static IDL_SYSFUN_DEF2 pro_def[] = {{(IDL_SYSRTN_GENERIC) COMP_POLY, "COMP_POLY", 3, 4, 0, 0}};
-
   return IDL_SysRtnAdd(pro_def, FALSE, 1);
 }
 
@@ -122,7 +122,7 @@ int IDL_Load(void)
 ;
 ; Keywords    : None.
 ;
-; Calls       : None.
+; Calls       : None
 ;
 ; Common      : None.
 ;
