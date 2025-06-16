@@ -1,24 +1,24 @@
 include ../Makefile.$(SSW_COMPILE_TYPE)
+include ../Makefile.etc
 
 CFLAGS		= -c -I$(IDL_DIR)/external
-FFLAGS          = -c
+FFLAGS		= -c
 
-# Shorthand
-E = $(SO_EXT)
-.SUFFIXES: .$(E)
+# Shorthand 
+.SUFFIXES: .$(SO_EXT)
 
-all: comp_poly.$(E)
+comp_poly.o: comp_poly.c
 
-install: comp_poly.$(E) comp_poly.dlm
+comp_poly.$(SO_EXT): comp_poly.o
+
+all: comp_poly.$(SO_EXT)
+
+install: comp_poly.$(SO_EXT) comp_poly.dlm
 	mkdir -p $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)
 	cp -p $^ $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)/
 
 .c.o:
 	$(CC) $(CFLAGS) $(X_CFLAGS) $*.c
 
-.o.$(E): 
+.o.$(SO_EXT):
 	$(LD) $(X_LD_FLAGS) -o $@ $?
-
-comp_poly.o: comp_poly.c
-
-include ../Makefile.etc
