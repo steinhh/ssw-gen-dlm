@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <export.h>
+#include "/Applications/NV5/idl91/external/include/idl_export.h"
 
 #define MASK 1 /* Enable/disable keyword mask */
 #define IKWOF(a) IDL_KW_OFFSETOF(a)
@@ -32,46 +32,57 @@ static void info(char *msg)
 
 #define SWAP(a, b) (atemp = a, a = b, b = atemp)
 
-#define COMP_POLY_CORE(TYPE, VAR_VALUE_FIELD, ALWAYS)     \
-  {                                                       \
-    TYPE *in = (TYPE *)a->value.arr->data;                \
-    TYPE *out = (TYPE *)res->value.arr->data;             \
-    TYPE *workspace = (TYPE *)Workspace->value.arr->data; \
+#define COMP_POLY_CORE(TYPE, VAR_VALUE_FIELD, ALWAYS)                                                                  \
+  {                                                                                                                    \
+    TYPE *in = (TYPE *) a->value.arr->data;                                                                            \
+    TYPE *out = (TYPE *) res->value.arr->data;                                                                         \
+    TYPE *workspace = (TYPE *) Workspace->value.arr->data;                                                             \
   }
 
 #define NO_STRUCT_DEF
 
+void assert_numeric(const char *description, IDL_VPTR arg)
+{
+  char msg[256];
+  if (arg->type != IDL_TYP_DOUBLE && arg->type != IDL_TYP_FLOAT && arg->type != IDL_TYP_INT &&
+      arg->type != IDL_TYP_UINT && arg->type != IDL_TYP_LONG && arg->type != IDL_TYP_ULONG) {
+    char msg[256];
+    snprintf(msg, sizeof(msg), "%s must be numeric", description);
+    bailout(msg);
+  } else {
+    snprintf(msg, sizeof(msg), "%s is numeric", description);
+    info(msg);
+  }
+}
+
 /*; Use         : COMP_POLY,X,A,F [,PDER]*/
 static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
+  assert_numeric("X (1st arg)", Argv[0]);
+  assert_numeric("A (coefficients)", Argv[1]);
+  IDL_ENSURE_ARRAY(Argv[0]); /* Ensure X is an array */
+  IDL_ENSURE_ARRAY(Argv[1]); /* Ensure A is an array */
+
   IDL_VPTR x = IDL_BasicTypeConversion(1, Argv, IDL_TYP_DOUBLE);     /* Input array */
   IDL_VPTR a = IDL_BasicTypeConversion(1, Argv + 1, IDL_TYP_DOUBLE); /* Coefficients */
-  IDL_VPTR f = Argv[2];                                              /* Output array */
-  IDL_VPTR pder = argc > 3 ? Argv[3] : NULL;                         /* Partial derivatives, optional */
 
-  IDL_VPTR Workspace;
+  // IDL_VPTR f = Argv[2]; /* Output array */
+  // IDL_VPTR pder = argc > 3 ? Argv[3] : NULL;                         /* Partial derivatives, optional */
+  // IDL_VPTR Workspace;
 
-  /* TYPE CHECKING / ALLOCATION SECTION */
-  if (!(x->flags & IDL_V_ARR))
-  {
-    bailout("X (1st arg) must be an array");
-  }
-
-  if (!(a->flags & IDL_V_ARR))
-  {
-    bailout("A (coefficients) must be an array");
-  }
-  if (a->value.arr->n_dim != 1)
-  {
-    bailout("A (coefficients) must be a 1-dimensional array");
-  }
-
-  IDL_VarCopy(x, f); /* Copy x to res */
-
-  // x and a may be temp variables due to type conversion, delete if so
-  // The IDL_DELTMP macro checks, does not hurt non-temp variables:
+  // info("Got here 1");
+  // if (a->value.arr->n_dim != 1) {
+  //   bailout("A (coefficients) must be a 1-dimensional array");
+  // }
+  // info("Got here 2");
+  // IDL_VarCopy(x, f); /* Copy x to res */
+  // info("Got here 3");
+  // // x and a may be temp variables due to type conversion, delete if so
+  // // The IDL_DELTMP macro checks, does not hurt non-temp variables:
   IDL_DELTMP(x);
+  info("Got here 4");
   IDL_DELTMP(a);
+  info("Got here 5");
 
   // IDL_VarMakeTempFromTemplate(x, x->type, NO_STRUCT_DEF, &f, FALSE);
 
@@ -85,14 +96,11 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
   // if (c != Argv[2])
   //   IDL_DELTMP(c);
   // IDL_DELTMP(Workspace);
-
-  // return res;
 }
 
 int IDL_Load(void)
 {
-  static IDL_SYSFUN_DEF2 pro_def[] =
-      {{{COMP_POLY}, "COMP_POLY", 3, 4, 0, 0}};
+  static IDL_SYSFUN_DEF2 pro_def[] = {{(IDL_SYSRTN_GENERIC) COMP_POLY, "COMP_POLY", 3, 4, 0, 0}};
 
   return IDL_SysRtnAdd(pro_def, FALSE, 1);
 }
