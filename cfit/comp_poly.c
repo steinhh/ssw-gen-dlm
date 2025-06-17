@@ -56,7 +56,7 @@ void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder, IDL_MEMINT
     pder_dim[0] = x_vptr->value.arr->n_elts; // Number of elements in x_vptr
     pder_dim[1] = a_vptr->value.arr->n_elts; // Number of coefficients in a_vptr
     IDL_VPTR tmp;
-    IDL_MakeTempArray(IDL_TYP_FLOAT, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
+    IDL_MakeTempArray(IDL_TYP_DOUBLE, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
     IDL_VarCopy(tmp, pder);
   }
 }
@@ -66,18 +66,18 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv); /* Input array */
-  IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv); /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
 
   IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
 
-  float *x = (void *) x_vptr->value.arr->data;
-  float *a = (void *) a_vptr->value.arr->data;
-  float *f = (void *) f_vptr->value.arr->data;
-  float *pder = NULL;
+  double *x = (void *) x_vptr->value.arr->data;
+  double *a = (void *) a_vptr->value.arr->data;
+  double *f = (void *) f_vptr->value.arr->data;
+  double *pder = NULL;
 
   IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
@@ -109,22 +109,18 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   info("COMP_GAUSS: Running!");
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv); /* Input array */
-  IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv); /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
   IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
 
-  float *a = (void *) a_vptr->value.arr->data;
-  float *f = (void *) f_vptr->value.arr->data;
-  float *x_data = (void *) x_vptr->value.arr->data;
-  float *pder = NULL;
+  double *a = (void *) a_vptr->value.arr->data;
+  double *f = (void *) f_vptr->value.arr->data;
+  double *x_data = (void *) x_vptr->value.arr->data;
+  double *pder = NULL;
 
-  // snprintf(msg, sizeof(msg), "a = [%.2f, %.2f, %.2f]", a[0], a[1], a[2]);
-  // info(msg);
-  // snprintf(msg, sizeof(msg), "x_vptr->value.arr->n_elts = %lld", x_vptr->value.arr->n_elts);
-  // info(msg);
   IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
     make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
@@ -132,13 +128,13 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   }
 
   for (IDL_MEMINT ix = 0; ix < x_vptr->value.arr->n_elts; ix++) {
-    float x = x_data[ix];
+    double x = x_data[ix];
     /* z = (x-a(1))/a(2) */
-    float z = (x - a[1]) / a[2];
+    double z = (x - a[1]) / a[2];
     /* z2 = z*z */
-    float z2 = z * z;
+    double z2 = z * z;
     /* kern = exp(-z2(ix)*0.5) */
-    float kern = exp(-z2 * 0.5);
+    double kern = exp(-z2 * 0.5);
     kern = (z2 < 1000.0) ? kern : 0.0; // Avoid exp overflow
     /* f(ix) = a(0)*exp(-z2(ix)*0.5) */
     f[ix] = a[0] * kern;
