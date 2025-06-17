@@ -64,7 +64,6 @@ void make_pder_array(IDL_VPTR x, IDL_VPTR a, IDL_VPTR pder, IDL_MEMINT pder_dim[
 /*; Use         : COMP_POLY,X,A,F [,PDER]*/
 static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
-  info("COMP_POLY: Running!");
   check_params(argc, Argv);
 
   IDL_VPTR x = IDL_CvtDbl(1, Argv);     /* Input array */
@@ -130,31 +129,32 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   double lambda0 = a_data[1]; // Center a[1]
   double w = a_data[2];       // Width a[2]
 
-  double exp_term;   // e^((lambda-lambda0)^2/w^2*0.5)
+  double kern;       // e^((lambda-lambda0)^2/w^2*0.5)
   double lambdadiff; //
   for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
     double lambda = x_data[xindex];
-    double z = (lambda - lambda0) / w; // Standardized variable
-    double z2 = z * z;                 // z squared
-    double exp_term = exp(-0.5 * z2);  // Exponential term
-    double F = A * exp_term;           // Gaussian function value
-    f_data[xindex] = F;                // Gaussian function value
+    double z = (lambda - lambda0) / w;
+    double z2 = z * z;
+    double kern = exp(-z2 * 0.5);
+    if (z2 > 1000.) {
+      kern = 0.0; // Avoid overflow for large z^2
+      // info("COMP_GAUSS: Using exp(-0.5 * z^2) for small z^2");
+    }
+    double F = A * kern;
+    f_data[xindex] = F;
     for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
       if (pder) {
         if (aindex == 0) {
-          // Derivative w.r.t. a[0]
-          // \frac{\dell f}{\dell a[0]} = e^{-\frac{(x-a[1])^2}{2a[2]^2}}
-          pder_data[xindex + aindex * pder_dim[0]] = exp_term; // Derivative w.r.t. a[0]
+          pder_data[xindex + aindex * pder_dim[0]] = kern; // Derivative w.r.t. a[0]
         }
         if (aindex == 1) {
-          // Derivative w.r.t. a[1]
-          // \frac{\dell f}{\dell a[1]} = f * \frac{(x-a[1])}{a[2]^2}
+          // pder_data[xindex + aindex * pder_dim[0]] = F * z / (w * w);
           pder_data[xindex + aindex * pder_dim[0]] = F * z / w;
         }
         if (aindex == 2) {
-          // Derivative w.r.t. a[2]
-          // \frac{\dell f}{\dell a[2]} = f * \frac{(x-a[1])^2}{a[2]^3}
-          pder_data[xindex + aindex * pder_dim[0]] = pder_data[xindex + 1 * pder_dim[0]] * z;
+          double pder1 = F * z / w;
+          // pder_data[xindex + aindex * pder_dim[0]] = F * z2 / (w * w * w);
+          pder_data[xindex + aindex * pder_dim[0]] = pder1 * z;
         }
       }
     }
@@ -166,21 +166,59 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
 
 /*
 PRO comp_gauss,x,a,f,pder
-  z = ( x - a[1] ) / a(2)
+   message, /info, "COMP_GAUSS running"
+  on_error,0
+
+  nx = n_elements(x)
+
+  z = (x-a(1))/a(2)
   z2 = z*z
+  ix = where(z2 LT 1000.0) ;; Exp(-1000) == 0 unless quadruple precision
 
-  f = a[0] * exp( -z2 * 0.5 )
 
-  f = a[0] * exp( - (( x - a[1] ) / a[2]) ^2 * 0.5 )
-  ;----
+  f = make_array(size=size(z))
 
-  kern = exp( -z2 * 0.5 )
+  IF ix(0) EQ -1 THEN BEGIN
+     IF n_params() EQ 4 THEN BEGIN
+        pder = fltarr(nx,3)
+     END
+     return
+  END
 
-  f = a(0)*kern
 
-  pder[0] = kern         ;;
-  pder[1] = f * z/a[2]   ;; a(0)exp(-0.5*(x-a(1))^2/a(2)^2) * (x-a(1))/a(2)^2
-  pder[2] = pder[1] * z  ;; a(0)exp(...) * (x-a(1))^2/a(2)^3
+  IF n_params() EQ 3 THEN BEGIN
+     f(ix) = a(0)*exp(-z2(ix)*0.5)
+     return
+  END
+
+  kern = exp(-z2(ix)*0.5)
+
+  f(ix) = a(0)*kern
+
+  pder = fltarr(nx,3)
+  pder(ix,0) = kern         ;;
+  pder(ix,1) = f(ix) * z(ix)/a(2)   ;; a(0)exp(-0.5*(x-a(1))^2/a(2)^2) * (x-a(1))/a(2)^2
+  pder(ix,2) = pder(ix,1) * z(ix) ;; a(0)exp(...) * (x-a(1))^2/a(2)^3
+  help,pder
+
+END
+*/
+
+/*
+Testing:
+x=(findgen(21)-10)/5 + 500
+comp_gauss,x,[1.01,500,1],f,pder
+window,0
+plot,x,f
+plot,x,f,yrange=[-1.2,1.2]
+oplot,x,pder[*,0]
+plot,x,f,yrange=[-1.2,1.2],ystyle=1
+oplot,x,pder[*,0]
+oplot,x,pder[*,1]
+oplot,x,pder[*,2]
+*/
+/*
+
  */
 
 int IDL_Load(void)
