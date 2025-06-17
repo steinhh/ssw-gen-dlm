@@ -142,8 +142,12 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
     }
   }
   // These might be temp. due to type conversion
-  IDL_DELTMP(x_vptr);
-  IDL_DELTMP(a_vptr);
+  if (x_vptr != Argv[0]) {
+    IDL_DELTMP(x_vptr);
+  }
+  if (a_vptr != Argv[1]) {
+    IDL_DELTMP(a_vptr);
+  }
 }
 
 /*
@@ -223,14 +227,18 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
 
   IDL_VPTR comp_args[4]; // For sending args to component
   comp_args[0] = x_vptr; // Input array
-  // comp_args[1] = gauss_a_vptr; // Coefficients for gauss
+  comp_args[1] = gauss_a_vptr; // Coefficients for gauss
   comp_args[2] = comp_f_vptr; // Output array for gauss
   comp_args[3] = comp_pder_vptr; // Partial derivatives for gauss, optional
-  int comp_argc = pder_vptr ? 4 : 3; // Number of args for component
 
-  // COMP_GAUSS(comp_argc, comp_args, NULL); // Call COMP_GAUSS with 3 args
+  COMP_GAUSS(argc, comp_args, NULL); // Call COMP_GAUSS with 3 or 4 args
 
   // These might be temp. due to type conversion
+  IDL_DELTMP(gauss_a_vptr);
+  IDL_DELTMP(comp_f_vptr);
+  if (comp_pder_vptr) {
+    IDL_DELTMP(comp_pder_vptr);
+  }
   IDL_DELTMP(x_vptr);
   IDL_DELTMP(a_vptr);
 }
