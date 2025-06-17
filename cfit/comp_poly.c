@@ -42,19 +42,19 @@ void check_params(int argc, IDL_VPTR Argv[])
   assert_numeric("A (coefficients)", Argv[1]);
 }
 
-void make_arr_from_template(IDL_VPTR x, IDL_VPTR dest)
+void make_arr_from_template(IDL_VPTR x_vptr, IDL_VPTR dest)
 {
   IDL_VPTR tmp;
   // Make F output array, first temporary then make permanent with IDL_VarCopy
-  IDL_VarMakeTempFromTemplate(x, x->type, NO_STRUCT_DEF, &tmp, FALSE);
+  IDL_VarMakeTempFromTemplate(x_vptr, x_vptr->type, NO_STRUCT_DEF, &tmp, FALSE);
   IDL_VarCopy(tmp, dest);
 }
 
-void make_pder_array(IDL_VPTR x, IDL_VPTR a, IDL_VPTR pder, IDL_MEMINT pder_dim[2])
+void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder, IDL_MEMINT pder_dim[2])
 {
   if (pder) {
-    pder_dim[0] = x->value.arr->n_elts; // Number of elements in x
-    pder_dim[1] = a->value.arr->n_elts; // Number of coefficients in a
+    pder_dim[0] = x_vptr->value.arr->n_elts; // Number of elements in x_vptr
+    pder_dim[1] = a_vptr->value.arr->n_elts; // Number of coefficients in a_vptr
     IDL_VPTR tmp;
     IDL_MakeTempArray(IDL_TYP_DOUBLE, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
     IDL_VarCopy(tmp, pder);
@@ -66,38 +66,38 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
   check_params(argc, Argv);
 
-  IDL_VPTR x = IDL_CvtDbl(1, Argv);     /* Input array */
-  IDL_VPTR a = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);     /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
 
-  IDL_VPTR f = Argv[2];                      /* Output array */
-  IDL_VPTR pder = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
+  IDL_VPTR f_vptr = Argv[2];                      /* Output array */
+  IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
-  make_arr_from_template(x, f);
+  make_arr_from_template(x_vptr, f_vptr);
 
-  double *x_data = (void *) x->value.arr->data;
-  double *a_data = (void *) a->value.arr->data;
-  double *f_data = (void *) f->value.arr->data;
+  double *x = (void *) x_vptr->value.arr->data;
+  double *a = (void *) a_vptr->value.arr->data;
+  double *f = (void *) f_vptr->value.arr->data;
   double *pder_data = NULL;
 
   IDL_MEMINT pder_dim[2];
-  if (pder) {
-    make_pder_array(x, a, pder, pder_dim);
-    pder_data = (void *) pder->value.arr->data;
+  if (pder_vptr) {
+    make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
+    pder_data = (void *) pder_vptr->value.arr->data;
   }
 
-  for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
-    f_data[xindex] = 0.0;
-    for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
-      f_data[xindex] += a_data[aindex] * pow(x_data[xindex], aindex);
-      if (pder) {
+  for (IDL_MEMINT xindex = 0; xindex < x_vptr->value.arr->n_elts; xindex++) {
+    f[xindex] = 0.0;
+    for (IDL_MEMINT aindex = 0; aindex < a_vptr->value.arr->n_elts; aindex++) {
+      f[xindex] += a[aindex] * pow(x[xindex], aindex);
+      if (pder_vptr) {
         // \frac{\dell }{\dell C} C * x^j  = x^j
-        pder_data[xindex + aindex * pder_dim[0]] = pow(x_data[xindex], aindex);
+        pder_data[xindex + aindex * pder_dim[0]] = pow(x[xindex], aindex);
       }
     }
   }
   // These might be temp. due to type conversion
-  IDL_DELTMP(x);
-  IDL_DELTMP(a);
+  IDL_DELTMP(x_vptr);
+  IDL_DELTMP(a_vptr);
 }
 
 /*; Use         : COMP_GAUSS,X,A,F [,PDER]*/
@@ -106,33 +106,33 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   info("COMP_GAUSS: Running!");
   check_params(argc, Argv);
 
-  IDL_VPTR x = IDL_CvtDbl(1, Argv);     /* Input array */
-  IDL_VPTR a = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);     /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
 
-  IDL_VPTR f = Argv[2];                      /* Output array */
-  IDL_VPTR pder = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
+  IDL_VPTR f_vptr = Argv[2];                      /* Output array */
+  IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
-  make_arr_from_template(x, f);
+  make_arr_from_template(x_vptr, f_vptr);
 
-  double *x_data = (void *) x->value.arr->data;
-  double *a_data = (void *) a->value.arr->data;
-  double *f_data = (void *) f->value.arr->data;
+  double *x = (void *) x_vptr->value.arr->data;
+  double *a = (void *) a_vptr->value.arr->data;
+  double *f = (void *) f_vptr->value.arr->data;
   double *pder_data = NULL;
 
   IDL_MEMINT pder_dim[2];
-  if (pder) {
-    make_pder_array(x, a, pder, pder_dim);
-    pder_data = (void *) pder->value.arr->data;
+  if (pder_vptr) {
+    make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
+    pder_data = (void *) pder_vptr->value.arr->data;
   }
 
-  double A = a_data[0];       // Coefficient a[0]
-  double lambda0 = a_data[1]; // Center a[1]
-  double w = a_data[2];       // Width a[2]
+  double A = a[0];       // Coefficient a[0]
+  double lambda0 = a[1]; // Center a[1]
+  double w = a[2];       // Width a[2]
 
   double kern;       // e^((lambda-lambda0)^2/w^2*0.5)
   double lambdadiff; //
-  for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
-    double lambda = x_data[xindex];
+  for (IDL_MEMINT xindex = 0; xindex < x_vptr->value.arr->n_elts; xindex++) {
+    double lambda = x[xindex];
     double z = (lambda - lambda0) / w;
     double z2 = z * z;
     double kern = exp(-z2 * 0.5);
@@ -141,9 +141,9 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
       // info("COMP_GAUSS: Using exp(-0.5 * z^2) for small z^2");
     }
     double F = A * kern;
-    f_data[xindex] = F;
-    for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
-      if (pder) {
+    f[xindex] = F;
+    for (IDL_MEMINT aindex = 0; aindex < a_vptr->value.arr->n_elts; aindex++) {
+      if (pder_vptr) {
         if (aindex == 0) {
           pder_data[xindex + aindex * pder_dim[0]] = kern; // Derivative w.r.t. a[0]
         }
@@ -160,8 +160,8 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
     }
   }
   // These might be temp. due to type conversion
-  IDL_DELTMP(x);
-  IDL_DELTMP(a);
+  IDL_DELTMP(x_vptr);
+  IDL_DELTMP(a_vptr);
 }
 
 /*
@@ -202,6 +202,16 @@ PRO comp_gauss,x,a,f,pder
   help,pder
 
 END
+*/
+
+/* Testing:
+x = [500.000, 500.200, 500.400, 500.600, 500.800, 501.000, 501.200, 501.400, 501.600, 501.800, 502.000, 502.200,
+502.400, 502.600, 502.800, 503.000, 503.200, 503.400, 503.600, 503.800] a = [45., 502., 0.4] comp_gauss,x,a,f,pder
+window,0
+plot,x,f
+oplot,x,pder[*,0]*10
+oplot,x,pder[*,1]/10.
+oplot,x,pder[*,2]/20.
 */
 
 /*
