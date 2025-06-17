@@ -133,13 +133,13 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   double exp_term;   // e^((lambda-lambda0)^2/w^2*0.5)
   double lambdadiff; //
   for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
+    double lambda = x_data[xindex];
+    double z = (lambda - lambda0) / w; // Standardized variable
+    double z2 = z * z;                 // z squared
+    double exp_term = exp(-0.5 * z2);  // Exponential term
+    double F = A * exp_term;           // Gaussian function value
+    f_data[xindex] = F;                // Gaussian function value
     for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
-      double lambda = x_data[xindex];
-      double z = (lambda - lambda0) / w; // Standardized variable
-      double z2 = z * z;                 // z squared
-      double exp_term = exp(-0.5 * z2);  // Exponential term
-      double F = A * exp_term;           // Gaussian function value
-      f_data[xindex] = F;                // Gaussian function value
       if (pder) {
         if (aindex == 0) {
           // Derivative w.r.t. a[0]
