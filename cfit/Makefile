@@ -7,13 +7,13 @@ FFLAGS		= -c
 # Shorthand 
 .SUFFIXES: .$(SO_EXT)
 
-comp_poly.o: comp_poly.c
+comp_poly.o: cfit.c
 
-comp_poly.$(SO_EXT): comp_poly.o
+comp_poly.$(SO_EXT): cfit.o
 
-all: comp_poly.$(SO_EXT)
+all: cfit.$(SO_EXT)
 
-install: comp_poly.$(SO_EXT) comp_poly.dlm
+install: cfit.$(SO_EXT) cfit.dlm
 	mkdir -p $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)
 	cp -p $^ $(SSW_DLM_TOP)/$(SSW_BINARY_TYPE)/
 
