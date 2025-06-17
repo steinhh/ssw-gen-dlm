@@ -126,13 +126,36 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
     pder_data = (void *) pder->value.arr->data;
   }
 
+  double A = a_data[0];       // Coefficient a[0]
+  double lambda0 = a_data[1]; // Center a[1]
+  double w = a_data[2];       // Width a[2]
+
+  double exp_term;   // e^((lambda-lambda0)^2/w^2*0.5)
+  double lambdadiff; //
   for (IDL_MEMINT xindex = 0; xindex < x->value.arr->n_elts; xindex++) {
-    f_data[xindex] = 0.0;
     for (IDL_MEMINT aindex = 0; aindex < a->value.arr->n_elts; aindex++) {
-      f_data[xindex] += a_data[aindex] * pow(x_data[xindex], aindex);
+      double lambda = x_data[xindex];
+      double z = (lambda - lambda0) / w; // Standardized variable
+      double z2 = z * z;                 // z squared
+      double exp_term = exp(-0.5 * z2);  // Exponential term
+      double F = A * exp_term;           // Gaussian function value
+      f_data[xindex] = F;                // Gaussian function value
       if (pder) {
-        // \frac{\dell }{\dell C} C * x^j  = x^j
-        pder_data[xindex + aindex * pder_dim[0]] = pow(x_data[xindex], aindex);
+        if (aindex == 0) {
+          // Derivative w.r.t. a[0]
+          // \frac{\dell f}{\dell a[0]} = e^{-\frac{(x-a[1])^2}{2a[2]^2}}
+          pder_data[xindex + aindex * pder_dim[0]] = exp_term; // Derivative w.r.t. a[0]
+        }
+        if (aindex == 1) {
+          // Derivative w.r.t. a[1]
+          // \frac{\dell f}{\dell a[1]} = f * \frac{(x-a[1])}{a[2]^2}
+          pder_data[xindex + aindex * pder_dim[0]] = F * z / w;
+        }
+        if (aindex == 2) {
+          // Derivative w.r.t. a[2]
+          // \frac{\dell f}{\dell a[2]} = f * \frac{(x-a[1])^2}{a[2]^3}
+          pder_data[xindex + aindex * pder_dim[0]] = pder_data[xindex + 1 * pder_dim[0]] * z;
+        }
       }
     }
   }
@@ -140,6 +163,25 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   IDL_DELTMP(x);
   IDL_DELTMP(a);
 }
+
+/*
+PRO comp_gauss,x,a,f,pder
+  z = ( x - a[1] ) / a(2)
+  z2 = z*z
+
+  f = a[0] * exp( -z2 * 0.5 )
+
+  f = a[0] * exp( - (( x - a[1] ) / a[2]) ^2 * 0.5 )
+  ;----
+
+  kern = exp( -z2 * 0.5 )
+
+  f = a(0)*kern
+
+  pder[0] = kern         ;;
+  pder[1] = f * z/a[2]   ;; a(0)exp(-0.5*(x-a(1))^2/a(2)^2) * (x-a(1))/a(2)^2
+  pder[2] = pder[1] * z  ;; a(0)exp(...) * (x-a(1))^2/a(2)^3
+ */
 
 int IDL_Load(void)
 {
