@@ -56,7 +56,7 @@ void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder, IDL_MEMINT
     pder_dim[0] = x_vptr->value.arr->n_elts; // Number of elements in x_vptr
     pder_dim[1] = a_vptr->value.arr->n_elts; // Number of coefficients in a_vptr
     IDL_VPTR tmp;
-    IDL_MakeTempArray(IDL_TYP_DOUBLE, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
+    IDL_MakeTempArray(IDL_TYP_FLOAT, 2, pder_dim, IDL_ARR_INI_NOP, &tmp);
     IDL_VarCopy(tmp, pder);
   }
 }
@@ -66,23 +66,23 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);     /* Input array */
-  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv);     /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
 
   IDL_VPTR f_vptr = Argv[2];                      /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
 
-  double *x = (void *) x_vptr->value.arr->data;
-  double *a = (void *) a_vptr->value.arr->data;
-  double *f = (void *) f_vptr->value.arr->data;
-  double *pder_data = NULL;
+  float *x = (void *) x_vptr->value.arr->data;
+  float *a = (void *) a_vptr->value.arr->data;
+  float *f = (void *) f_vptr->value.arr->data;
+  float *pder = NULL;
 
   IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
     make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
-    pder_data = (void *) pder_vptr->value.arr->data;
+    pder = (void *) pder_vptr->value.arr->data;
   }
 
   for (IDL_MEMINT xindex = 0; xindex < x_vptr->value.arr->n_elts; xindex++) {
@@ -91,7 +91,7 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
       f[xindex] += a[aindex] * pow(x[xindex], aindex);
       if (pder_vptr) {
         // \frac{\dell }{\dell C} C * x^j  = x^j
-        pder_data[xindex + aindex * pder_dim[0]] = pow(x[xindex], aindex);
+        pder[xindex + aindex * pder_dim[0]] = pow(x[xindex], aindex);
       }
     }
   }
@@ -100,61 +100,63 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
   IDL_DELTMP(a_vptr);
 }
 
+// **************************************************************************
+
 /*; Use         : COMP_GAUSS,X,A,F [,PDER]*/
 static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
 {
   info("COMP_GAUSS: Running!");
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);     /* Input array */
-  IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1); /* Coefficients */
+  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv);     /* Input array */
+  IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
 
   IDL_VPTR f_vptr = Argv[2];                      /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
 
-  double *x = (void *) x_vptr->value.arr->data;
-  double *a = (void *) a_vptr->value.arr->data;
-  double *f = (void *) f_vptr->value.arr->data;
-  double *pder_data = NULL;
+  float *x = (void *) x_vptr->value.arr->data;
+  float *a = (void *) a_vptr->value.arr->data;
+  float *f = (void *) f_vptr->value.arr->data;
+  float *pder = NULL;
 
   IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
     make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
-    pder_data = (void *) pder_vptr->value.arr->data;
+    pder = (void *) pder_vptr->value.arr->data;
   }
 
-  double A = a[0];       // Coefficient a[0]
-  double lambda0 = a[1]; // Center a[1]
-  double w = a[2];       // Width a[2]
+  float A = a[0];       // Coefficient a[0]
+  float lambda0 = a[1]; // Center a[1]
+  float w = a[2];       // Width a[2]
 
-  double kern;       // e^((lambda-lambda0)^2/w^2*0.5)
-  double lambdadiff; //
+  float kern;       // e^((lambda-lambda0)^2/w^2*0.5)
+  float lambdadiff; //
   for (IDL_MEMINT xindex = 0; xindex < x_vptr->value.arr->n_elts; xindex++) {
-    double lambda = x[xindex];
-    double z = (lambda - lambda0) / w;
-    double z2 = z * z;
-    double kern = exp(-z2 * 0.5);
+    float lambda = x[xindex];
+    float z = (lambda - lambda0) / w;
+    float z2 = z * z;
+    float kern = exp(-z2 * 0.5);
     if (z2 > 1000.) {
       kern = 0.0; // Avoid overflow for large z^2
       // info("COMP_GAUSS: Using exp(-0.5 * z^2) for small z^2");
     }
-    double F = A * kern;
+    float F = A * kern;
     f[xindex] = F;
     for (IDL_MEMINT aindex = 0; aindex < a_vptr->value.arr->n_elts; aindex++) {
       if (pder_vptr) {
         if (aindex == 0) {
-          pder_data[xindex + aindex * pder_dim[0]] = kern; // Derivative w.r.t. a[0]
+          pder[xindex + aindex * pder_dim[0]] = kern; // Derivative w.r.t. a[0]
         }
         if (aindex == 1) {
-          // pder_data[xindex + aindex * pder_dim[0]] = F * z / (w * w);
-          pder_data[xindex + aindex * pder_dim[0]] = F * z / w;
+          // pder[xindex + aindex * pder_dim[0]] = F * z / (w * w);
+          pder[xindex + aindex * pder_dim[0]] = F * z / w;
         }
         if (aindex == 2) {
-          double pder1 = F * z / w;
-          // pder_data[xindex + aindex * pder_dim[0]] = F * z2 / (w * w * w);
-          pder_data[xindex + aindex * pder_dim[0]] = pder1 * z;
+          float pder1 = F * z / w;
+          // pder[xindex + aindex * pder_dim[0]] = F * z2 / (w * w * w);
+          pder[xindex + aindex * pder_dim[0]] = pder1 * z;
         }
       }
     }
