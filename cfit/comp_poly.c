@@ -66,10 +66,10 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv);     /* Input array */
+  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv); /* Input array */
   IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
 
-  IDL_VPTR f_vptr = Argv[2];                      /* Output array */
+  IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
@@ -105,60 +105,53 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 /*; Use         : COMP_GAUSS,X,A,F [,PDER]*/
 static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
 {
+  char msg[256];
   info("COMP_GAUSS: Running!");
   check_params(argc, Argv);
 
-  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv);     /* Input array */
+  IDL_VPTR x_vptr = IDL_CvtFlt(1, Argv); /* Input array */
   IDL_VPTR a_vptr = IDL_CvtFlt(1, Argv + 1); /* Coefficients */
-
-  IDL_VPTR f_vptr = Argv[2];                      /* Output array */
+  IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; /* Partial derivatives, optional */
 
   make_arr_from_template(x_vptr, f_vptr);
 
-  float *x = (void *) x_vptr->value.arr->data;
   float *a = (void *) a_vptr->value.arr->data;
   float *f = (void *) f_vptr->value.arr->data;
+  float *x_data = (void *) x_vptr->value.arr->data;
   float *pder = NULL;
 
+  // snprintf(msg, sizeof(msg), "a = [%.2f, %.2f, %.2f]", a[0], a[1], a[2]);
+  // info(msg);
+  // snprintf(msg, sizeof(msg), "x_vptr->value.arr->n_elts = %lld", x_vptr->value.arr->n_elts);
+  // info(msg);
   IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
     make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
     pder = (void *) pder_vptr->value.arr->data;
   }
 
-  float A = a[0];       // Coefficient a[0]
-  float lambda0 = a[1]; // Center a[1]
-  float w = a[2];       // Width a[2]
-
-  float kern;       // e^((lambda-lambda0)^2/w^2*0.5)
-  float lambdadiff; //
-  for (IDL_MEMINT xindex = 0; xindex < x_vptr->value.arr->n_elts; xindex++) {
-    float lambda = x[xindex];
-    float z = (lambda - lambda0) / w;
+  for (IDL_MEMINT ix = 0; ix < x_vptr->value.arr->n_elts; ix++) {
+    float x = x_data[ix];
+    /* z = (x-a(1))/a(2) */
+    float z = (x - a[1]) / a[2];
+    /* z2 = z*z */
     float z2 = z * z;
+    /* kern = exp(-z2(ix)*0.5) */
     float kern = exp(-z2 * 0.5);
-    if (z2 > 1000.) {
-      kern = 0.0; // Avoid overflow for large z^2
-      // info("COMP_GAUSS: Using exp(-0.5 * z^2) for small z^2");
-    }
-    float F = A * kern;
-    f[xindex] = F;
-    for (IDL_MEMINT aindex = 0; aindex < a_vptr->value.arr->n_elts; aindex++) {
-      if (pder_vptr) {
-        if (aindex == 0) {
-          pder[xindex + aindex * pder_dim[0]] = kern; // Derivative w.r.t. a[0]
-        }
-        if (aindex == 1) {
-          // pder[xindex + aindex * pder_dim[0]] = F * z / (w * w);
-          pder[xindex + aindex * pder_dim[0]] = F * z / w;
-        }
-        if (aindex == 2) {
-          float pder1 = F * z / w;
-          // pder[xindex + aindex * pder_dim[0]] = F * z2 / (w * w * w);
-          pder[xindex + aindex * pder_dim[0]] = pder1 * z;
-        }
-      }
+    kern = (z2 < 1000.0) ? kern : 0.0; // Avoid exp overflow
+    /* f(ix) = a(0)*exp(-z2(ix)*0.5) */
+    f[ix] = a[0] * kern;
+    // snprintf(msg, sizeof(msg), "COMP_GAUSS: ix = %lld, x = %.2f, z = %.2f, kern = %.6f", ix, x, z, kern);
+    // info(msg);
+
+    if (pder_vptr) {
+      /* pder(ix,0) = kern  */
+      pder[ix + 0 * pder_dim[0]] = kern;
+      /* pder[ix,1] = f(ix) * z(ix)/a(2) */
+      pder[ix + 1 * pder_dim[0]] = f[ix] * z / a[2];
+      /* pder[ix,2] = pder(ix,1) * z(ix) */
+      pder[ix + 2 * pder_dim[0]] = pder[ix + 1 * pder_dim[0]] * z;
     }
   }
   // These might be temp. due to type conversion
@@ -200,15 +193,18 @@ PRO comp_gauss,x,a,f,pder
   pder = fltarr(nx,3)
   pder(ix,0) = kern         ;;
   pder(ix,1) = f(ix) * z(ix)/a(2)   ;; a(0)exp(-0.5*(x-a(1))^2/a(2)^2) * (x-a(1))/a(2)^2
-  pder(ix,2) = pder(ix,1) * z(ix) ;; a(0)exp(...) * (x-a(1))^2/a(2)^3
+  pder(ix,2) = pder(ix,1) * z(ix)   ;; a(0)exp(...) * (x-a(1))^2/a(2)^3
   help,pder
 
 END
 */
 
 /* Testing:
-x = [500.000, 500.200, 500.400, 500.600, 500.800, 501.000, 501.200, 501.400, 501.600, 501.800, 502.000, 502.200,
-502.400, 502.600, 502.800, 503.000, 503.200, 503.400, 503.600, 503.800] a = [45., 502., 0.4] comp_gauss,x,a,f,pder
+x = [500.000, 500.200, 500.400, 500.600, 500.800, 501.000, 501.200, 501.400, 501.600, 501.800, 502.000, 502.200, 502.400, 502.600, 502.800, 503.000, 503.200, 503.400, 503.600, 503.800] 
+
+a = [45., 502., 0.4]
+
+comp_gauss,x,a,f,pder
 window,0
 plot,x,f
 oplot,x,pder[*,0]*10
