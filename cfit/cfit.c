@@ -193,9 +193,10 @@ double *make_a_vector(IDL_VPTR vptr, IDL_LONG64 n_elts)
 
 // *a points to first param (offset has been applied)
 // *pder points to first "row" of pders for for our params (offset has been applied)
-static void cf_gauss(IDL_VPTR x_vptr, double *a, double *f, double *pder)
+static void cf_gauss(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
 {
   int argc = pder ? 4 : 3; // 3 or 4 args to COMP_GAUSS
+  double *f = (void *) f_vptr->value.arr->data;
   IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
   IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
   IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
@@ -239,9 +240,10 @@ static void cf_gauss(IDL_VPTR x_vptr, double *a, double *f, double *pder)
   }
 }
 
-static void cf_poly(IDL_VPTR x_vptr, double *a, double *f, double *pder)
+static void cf_poly(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
 {
   int argc = pder ? 4 : 3; // 3 or 4 args to COMP_POLY
+  double *f = (void *) f_vptr->value.arr->data;
   IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
   IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
   IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
@@ -298,7 +300,6 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   make_arr_0_from_template(x_vptr, f_vptr); // Also permanent, we'll return it
 
   double *a = (void *) a_vptr->value.arr->data;
-  double *f = (void *) f_vptr->value.arr->data;
   double *pder = NULL;
 
   // Partial derivative will be [ a0, a1, a2, a3 ] where
@@ -309,11 +310,8 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   }
 
   IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
-  cf_gauss(x_vptr, a, f, pder);
-
-  // Now call COMP_POLY
-
-  cf_poly(x_vptr, a + 3, f, pder + 3 * Nx);
+  cf_gauss(x_vptr, a, f_vptr, pder);
+  cf_poly(x_vptr, a + 3, f_vptr, pder + 3 * Nx);
 
   IDL_DELTMP(x_vptr);
   IDL_DELTMP(a_vptr);
