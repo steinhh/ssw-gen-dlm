@@ -240,6 +240,8 @@ static void cf_gauss(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
   }
 }
 
+// *a points to first param (offset has been applied)
+// *pder points to first "row" of pders for for our params (offset has been applied)
 static void cf_poly(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
 {
   int argc = pder ? 4 : 3; // 3 or 4 args to COMP_POLY
