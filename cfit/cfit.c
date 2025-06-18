@@ -289,7 +289,7 @@ static void cf_poly(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
   }
 }
 
-static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
+static void cf_Ng_p0_(int argc, IDL_VPTR Argv[], int Ngauss)
 {
   char msg[256];
   check_numeric_array_params(argc, Argv);
@@ -304,19 +304,27 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   double *a = (void *) a_vptr->value.arr->data;
   double *pder = NULL;
 
-  // Partial derivative will be [ a0, a1, a2, a3 ] where
-  // a0...a2 are gauss params, and a3 is polynomial constant
   if (pder_vptr) {
     make_pder_array(x_vptr, a_vptr, pder_vptr);
     pder = (void *) pder_vptr->value.arr->data;
   }
 
   IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
-  cf_gauss(x_vptr, a, f_vptr, pder);
-  cf_poly(x_vptr, a + 3, f_vptr, pder + 3 * Nx);
+  for (int i = 0; i < Ngauss; i++) {
+    cf_gauss(x_vptr, a, f_vptr, pder);
+    a += 3;
+    pder = pder ? pder + 3 * Nx : NULL;
+  }
+
+  cf_poly(x_vptr, a, f_vptr, pder);
 
   IDL_DELTMP(x_vptr);
   IDL_DELTMP(a_vptr);
+}
+
+static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
+{
+  cf_Ng_p0_(argc, Argv, 1); // Call with Ngauss = 1
 }
 
 int IDL_Load(void)
