@@ -297,7 +297,6 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
 
   make_arr_0_from_template(x_vptr, f_vptr); // Also permanent, we'll return it
 
-  double *x = (void *) x_vptr->value.arr->data;
   double *a = (void *) a_vptr->value.arr->data;
   double *f = (void *) f_vptr->value.arr->data;
   double *pder = NULL;
