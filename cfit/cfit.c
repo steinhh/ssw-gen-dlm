@@ -112,7 +112,6 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
 {
   char msg[256];
-  info("COMP_GAUSS: Running!");
   check_numeric_array_params(argc, Argv);
 
   IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);
@@ -150,7 +149,6 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   if (x_vptr != Argv[0]) {
     IDL_DELTMP(x_vptr);
   }
-  info("COMP_GAUSS: Running 6");
   if (a_vptr != Argv[1]) {
     IDL_DELTMP(a_vptr);
   }
