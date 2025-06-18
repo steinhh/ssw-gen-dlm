@@ -64,7 +64,6 @@ void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder, IDL_MEMINT
 static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 {
   check_numeric_array_params(argc, Argv);
-
   IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);
   IDL_VPTR a_vptr = IDL_CvtDbl(1, Argv + 1);
 
@@ -94,9 +93,14 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
       }
     }
   }
+
   // These might be temp. due to type conversion
-  IDL_DELTMP(x_vptr);
-  IDL_DELTMP(a_vptr);
+  if (x_vptr != Argv[0]) {
+    IDL_DELTMP(x_vptr);
+  }
+  if (a_vptr != Argv[1]) {
+    IDL_DELTMP(a_vptr);
+  }
 }
 
 // ****************************************************************************************************
@@ -145,6 +149,7 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   if (x_vptr != Argv[0]) {
     IDL_DELTMP(x_vptr);
   }
+  info("COMP_GAUSS: Running 6");
   if (a_vptr != Argv[1]) {
     IDL_DELTMP(a_vptr);
   }
@@ -187,10 +192,60 @@ double *make_a_vector(IDL_VPTR vptr, IDL_LONG64 n_elts)
 // ***************************************** cf_g_p0_ *************************************************
 // ****************************************************************************************************
 
+// *a points to first param (offset has been applied)
+// *pder points to first "row" of pders for for our params (offset has been applied)
+static void cf_gauss(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
+{
+  int argc = pder ? 4 : 3; // 3 or 4 args to COMP_GAUSS
+  IDL_VPTR comp_args[4]; // For sending args to component
+
+  IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
+  double *comp_a = make_a_vector(comp_a_vptr, 3); // a0, a1, a2
+  comp_a[0] = a[0]; // a0 is the height
+  comp_a[1] = a[1]; // a1 is the center
+  comp_a[2] = a[2]; // a2 is the width
+
+  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
+  IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
+
+  comp_args[0] = x_vptr; // Input array
+  comp_args[1] = comp_a_vptr; // Coefficients
+  comp_args[2] = comp_f_vptr; // Output
+  comp_args[3] = comp_pder_vptr; // Partial derivatives, optional
+
+  COMP_GAUSS(argc, comp_args, NULL); // Call COMP_GAUSS with 3 or 4 args
+
+  // Copy comp_gauss result into our result:
+  double *comp_f = (void *) comp_f_vptr->value.arr->data;
+  double *f = (void *) f_vptr->value.arr->data;
+  for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
+    f[i] = comp_f[i];
+  }
+
+  // Copy partial derivatives from comp_gauss to our pder
+  // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
+  // i.e....
+  //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
+  int Nx = x_vptr->value.arr->n_elts;
+  if (pder) {
+    double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
+    for (int param = 0; param < 3; param++) {
+      for (int ix = 0; ix < Nx; ix++) {
+        pder[ix + param * Nx] = comp_pder[ix + param * Nx];
+      }
+    }
+  }
+
+  IDL_DELTMP(comp_a_vptr);
+  IDL_DELTMP(comp_f_vptr);
+  if (comp_pder_vptr) {
+    IDL_DELTMP(comp_pder_vptr);
+  }
+}
+
 static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
 {
   char msg[256];
-  info("cf_g_p0_: Running!");
   check_numeric_array_params(argc, Argv);
 
   IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);
@@ -213,60 +268,18 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
     pder = (void *) pder_vptr->value.arr->data;
   }
 
-  // Stage things for calling COMP_GAUSS
-  IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
-  double *comp_a = make_a_vector(comp_a_vptr, 3); // a0, a1, a2
-  comp_a[0] = a[0]; // a0 is the height
-  comp_a[1] = a[1]; // a1 is the center
-  comp_a[2] = a[2]; // a2 is the width
-
-  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
-  IDL_VPTR comp_pder_vptr = pder_vptr ? IDL_Gettmp() : NULL; // For receiving pder from component
-
-  info("Here we go 7");
-
-  IDL_VPTR comp_args[4]; // For sending args to component
-  comp_args[0] = x_vptr; // Input array
-  comp_args[1] = comp_a_vptr; // Coefficients
-  comp_args[2] = comp_f_vptr; // Output
-  comp_args[3] = comp_pder_vptr; // Partial derivatives, optional
-
-  COMP_GAUSS(argc, comp_args, NULL); // Call COMP_GAUSS with 3 or 4 args
-
-  // Copy comp_gauss result into our result:
-  double *comp_f = (void *) comp_f_vptr->value.arr->data;
-  for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
-    f[i] = comp_f[i];
-  }
-
-  // Copy partial derivatives from comp_gauss to our pder
-  // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
-  // i.e....
-  //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
-  int param_off = 0; // Offset - will be 3 after gauss component 1.
-  int Nx = pder_dim[0];
-  if (pder_vptr) {
-    double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
-    for (int param = 0; param < 3; param++) {
-      for (int ix = 0; ix < pder_dim[0]; ix++) {
-        pder[ix + (param + param_off) * pder_dim[0]] = comp_pder[ix + param * pder_dim[0]];
-      }
-    }
-  }
-  param_off += 3; // We have added 3 params from gauss component
-  IDL_DELTMP(comp_a_vptr);
-  IDL_DELTMP(comp_f_vptr);
-  if (comp_pder_vptr) {
-    IDL_DELTMP(comp_pder_vptr);
-  }
+  cf_gauss(x_vptr, a, f_vptr, pder);
 
   // Now call COMP_POLY
 
-  comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
-  comp_pder_vptr = pder_vptr ? IDL_Gettmp() : NULL; // For receiving pder from component
+  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
+  IDL_VPTR comp_pder_vptr = pder_vptr ? IDL_Gettmp() : NULL; // For receiving pder from component
+  IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
 
-  comp_a = make_a_vector(comp_a_vptr, 1);
+  double *comp_a = make_a_vector(comp_a_vptr, 1);
   comp_a[0] = a[3];
+
+  IDL_VPTR comp_args[4]; // For sending args to component
   comp_args[0] = x_vptr; // Input array
   comp_args[1] = comp_a_vptr; // Coefficients for polynomial
   comp_args[2] = comp_f_vptr; // Output array for polynomial
@@ -274,7 +287,7 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   COMP_POLY(argc, comp_args, NULL); // Call COMP_POLY with 3 or 4 args
 
   // Copy component result:
-  comp_f = (void *) comp_f_vptr->value.arr->data;
+  double *comp_f = (void *) comp_f_vptr->value.arr->data;
   for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
     f[i] += comp_f[i];
   }
@@ -283,22 +296,24 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
   // i.e....
   //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
+  int param_off = 3; // We have 3 params from comp_gauss
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
   if (pder_vptr) {
     double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
     for (int param = 0; param < 1; param++) {
-      for (int ix = 0; ix < pder_dim[0]; ix++) {
-        pder[ix + (param + param_off) * pder_dim[0]] = comp_pder[ix + param * pder_dim[0]];
+      for (int ix = 0; ix < Nx; ix++) {
+        pder[ix + (param + param_off) * Nx] = comp_pder[ix + param * pder_dim[0]];
       }
     }
   }
   param_off += 1; // We have added 1 params from comp_poly
 
   IDL_DELTMP(comp_a_vptr);
-
   IDL_DELTMP(comp_f_vptr);
   if (comp_pder_vptr) {
     IDL_DELTMP(comp_pder_vptr);
   }
+
   IDL_DELTMP(x_vptr);
   IDL_DELTMP(a_vptr);
 }
