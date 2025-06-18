@@ -37,16 +37,17 @@ void check_numeric_array_params(int argc, IDL_VPTR Argv[])
   assert_numeric("A (coefficients)", Argv[1]);
 }
 
-void make_arr_from_template(IDL_VPTR x_vptr, IDL_VPTR dest)
+void make_arr_0_from_template(IDL_VPTR x_vptr, IDL_VPTR dest)
 {
   IDL_VPTR tmp;
   // First temporary then copy it where caller wants
-  IDL_VarMakeTempFromTemplate(x_vptr, x_vptr->type, 0 /*not struct*/, &tmp, FALSE);
+  IDL_VarMakeTempFromTemplate(x_vptr, x_vptr->type, 0 /*not struct*/, &tmp, TRUE);
   IDL_VarCopy(tmp, dest);
 }
 
-void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder, IDL_MEMINT pder_dim[2])
+void make_pder_array(IDL_VPTR x_vptr, IDL_VPTR a_vptr, IDL_VPTR pder)
 {
+  IDL_MEMINT pder_dim[2];
   if (pder) {
     pder_dim[0] = x_vptr->value.arr->n_elts;
     pder_dim[1] = a_vptr->value.arr->n_elts;
@@ -70,26 +71,26 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
   IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; // Partial derivatives, optional
 
-  make_arr_from_template(x_vptr, f_vptr);
+  make_arr_0_from_template(x_vptr, f_vptr);
 
   double *x = (void *) x_vptr->value.arr->data;
   double *a = (void *) a_vptr->value.arr->data;
   double *f = (void *) f_vptr->value.arr->data;
   double *pder = NULL;
 
-  IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
-    make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
+    make_pder_array(x_vptr, a_vptr, pder_vptr);
     pder = (void *) pder_vptr->value.arr->data;
   }
 
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
   for (IDL_MEMINT ix = 0; ix < x_vptr->value.arr->n_elts; ix++) {
     f[ix] = 0.0;
     for (IDL_MEMINT aix = 0; aix < a_vptr->value.arr->n_elts; aix++) {
       f[ix] += a[aix] * pow(x[ix], aix);
       if (pder_vptr) {
         // \frac{\partial}{\partial a[aix]} a[aix] * pow(...) = pow(...)
-        pder[ix + aix * pder_dim[0]] = pow(x[ix], aix);
+        pder[ix + aix * Nx] = pow(x[ix], aix);
       }
     }
   }
@@ -119,19 +120,19 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   IDL_VPTR f_vptr = Argv[2]; /* Output array */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; // Partial derivatives, optional
 
-  make_arr_from_template(x_vptr, f_vptr);
+  make_arr_0_from_template(x_vptr, f_vptr);
 
   double *a = (void *) a_vptr->value.arr->data;
   double *f = (void *) f_vptr->value.arr->data;
   double *x = (void *) x_vptr->value.arr->data;
   double *pder = NULL;
 
-  IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
-    make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
+    make_pder_array(x_vptr, a_vptr, pder_vptr);
     pder = (void *) pder_vptr->value.arr->data;
   }
 
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
   for (IDL_MEMINT ix = 0; ix < x_vptr->value.arr->n_elts; ix++) {
     double z = (x[ix] - a[1]) / a[2];
     double z2 = z * z;
@@ -140,9 +141,9 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
     f[ix] = a[0] * kern;
 
     if (pder_vptr) {
-      pder[ix + 0 * pder_dim[0]] = kern;
-      pder[ix + 1 * pder_dim[0]] = f[ix] * z / a[2];
-      pder[ix + 2 * pder_dim[0]] = pder[ix + 1 * pder_dim[0]] * z;
+      pder[ix + 0 * Nx] = kern;
+      pder[ix + 1 * Nx] = f[ix] * z / a[2];
+      pder[ix + 2 * Nx] = pder[ix + 1 * Nx] * z;
     }
   }
   // These might be temp. due to type conversion
@@ -194,42 +195,85 @@ double *make_a_vector(IDL_VPTR vptr, IDL_LONG64 n_elts)
 
 // *a points to first param (offset has been applied)
 // *pder points to first "row" of pders for for our params (offset has been applied)
-static void cf_gauss(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
+static void cf_gauss(IDL_VPTR x_vptr, double *a, double *f, double *pder)
 {
   int argc = pder ? 4 : 3; // 3 or 4 args to COMP_GAUSS
-  IDL_VPTR comp_args[4]; // For sending args to component
-
+  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
+  IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
   IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
+
   double *comp_a = make_a_vector(comp_a_vptr, 3); // a0, a1, a2
   comp_a[0] = a[0]; // a0 is the height
   comp_a[1] = a[1]; // a1 is the center
   comp_a[2] = a[2]; // a2 is the width
 
-  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
-  IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
-
+  IDL_VPTR comp_args[4]; // For sending args to component
   comp_args[0] = x_vptr; // Input array
   comp_args[1] = comp_a_vptr; // Coefficients
   comp_args[2] = comp_f_vptr; // Output
   comp_args[3] = comp_pder_vptr; // Partial derivatives, optional
-
   COMP_GAUSS(argc, comp_args, NULL); // Call COMP_GAUSS with 3 or 4 args
 
-  // Copy comp_gauss result into our result:
+  // Copy component result:
   double *comp_f = (void *) comp_f_vptr->value.arr->data;
-  double *f = (void *) f_vptr->value.arr->data;
-  for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
-    f[i] = comp_f[i];
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
+  for (int i = 0; i < Nx; i++) {
+    f[i] += comp_f[i];
   }
 
   // Copy partial derivatives from comp_gauss to our pder
-  // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
+  // Our pder = array[Nx,  Na] and all pder[*,i] are consecutive,
   // i.e....
-  //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
-  int Nx = x_vptr->value.arr->n_elts;
+  //   comp_pder = array[Nx, cNa] and cNa = 3 (comp. has 3 parms)
   if (pder) {
     double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
     for (int param = 0; param < 3; param++) {
+      for (int ix = 0; ix < Nx; ix++) {
+        pder[ix + param * Nx] = comp_pder[ix + param * Nx];
+      }
+    }
+  }
+
+  IDL_DELTMP(comp_a_vptr);
+  IDL_DELTMP(comp_f_vptr);
+  if (comp_pder_vptr) {
+    IDL_DELTMP(comp_pder_vptr);
+  }
+}
+
+static void cf_poly(IDL_VPTR x_vptr, double *a, double *f, double *pder)
+{
+  int argc = pder ? 4 : 3; // 3 or 4 args to COMP_POLY
+  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
+  IDL_VPTR comp_pder_vptr = pder ? IDL_Gettmp() : NULL; // For receiving pder from component
+  IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
+
+  double *comp_a = make_a_vector(comp_a_vptr, 1);
+  comp_a[0] = a[0];
+  //
+  //
+
+  IDL_VPTR comp_args[4]; // For sending args to component
+  comp_args[0] = x_vptr; // Input array
+  comp_args[1] = comp_a_vptr; // Coefficients for polynomial
+  comp_args[2] = comp_f_vptr; // Output array for polynomial
+  comp_args[3] = comp_pder_vptr; // Partial derivatives for polynomial, optional
+  COMP_POLY(argc, comp_args, NULL); // Call COMP_POLY with 3 or 4 args
+
+  // Copy component result:
+  double *comp_f = (void *) comp_f_vptr->value.arr->data;
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
+  for (int i = 0; i < Nx; i++) {
+    f[i] += comp_f[i];
+  }
+
+  // Copy partial derivatives from comp_gauss to our pder
+  // Our pder = array[Nx,  Na] and all pder[*,i] are consecutive,
+  // i.e....
+  //   comp_pder = array[Nx, cNa] and cNa = 3 (comp. has 3 parms)
+  if (pder) {
+    double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
+    for (int param = 0; param < 1; param++) {
       for (int ix = 0; ix < Nx; ix++) {
         pder[ix + param * Nx] = comp_pder[ix + param * Nx];
       }
@@ -253,7 +297,7 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
   IDL_VPTR f_vptr = Argv[2]; /* Pointer to var to store output */
   IDL_VPTR pder_vptr = argc > 3 ? Argv[3] : NULL; // Partial derivatives, optional
 
-  make_arr_from_template(x_vptr, f_vptr); // Also permanent, we'll return it
+  make_arr_0_from_template(x_vptr, f_vptr); // Also permanent, we'll return it
 
   double *x = (void *) x_vptr->value.arr->data;
   double *a = (void *) a_vptr->value.arr->data;
@@ -262,57 +306,17 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
 
   // Partial derivative will be [ a0, a1, a2, a3 ] where
   // a0...a2 are gauss params, and a3 is polynomial constant
-  IDL_MEMINT pder_dim[2];
   if (pder_vptr) {
-    make_pder_array(x_vptr, a_vptr, pder_vptr, pder_dim);
+    make_pder_array(x_vptr, a_vptr, pder_vptr);
     pder = (void *) pder_vptr->value.arr->data;
   }
 
-  cf_gauss(x_vptr, a, f_vptr, pder);
+  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
+  cf_gauss(x_vptr, a, f, pder);
 
   // Now call COMP_POLY
 
-  IDL_VPTR comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
-  IDL_VPTR comp_pder_vptr = pder_vptr ? IDL_Gettmp() : NULL; // For receiving pder from component
-  IDL_VPTR comp_a_vptr = IDL_Gettmp(); // For gauss params
-
-  double *comp_a = make_a_vector(comp_a_vptr, 1);
-  comp_a[0] = a[3];
-
-  IDL_VPTR comp_args[4]; // For sending args to component
-  comp_args[0] = x_vptr; // Input array
-  comp_args[1] = comp_a_vptr; // Coefficients for polynomial
-  comp_args[2] = comp_f_vptr; // Output array for polynomial
-  comp_args[3] = comp_pder_vptr; // Partial derivatives for polynomial, optional
-  COMP_POLY(argc, comp_args, NULL); // Call COMP_POLY with 3 or 4 args
-
-  // Copy component result:
-  double *comp_f = (void *) comp_f_vptr->value.arr->data;
-  for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
-    f[i] += comp_f[i];
-  }
-
-  // Copy partial derivatives from comp_gauss to our pder
-  // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
-  // i.e....
-  //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
-  int param_off = 3; // We have 3 params from comp_gauss
-  IDL_MEMINT Nx = x_vptr->value.arr->n_elts;
-  if (pder_vptr) {
-    double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
-    for (int param = 0; param < 1; param++) {
-      for (int ix = 0; ix < Nx; ix++) {
-        pder[ix + (param + param_off) * Nx] = comp_pder[ix + param * pder_dim[0]];
-      }
-    }
-  }
-  param_off += 1; // We have added 1 params from comp_poly
-
-  IDL_DELTMP(comp_a_vptr);
-  IDL_DELTMP(comp_f_vptr);
-  if (comp_pder_vptr) {
-    IDL_DELTMP(comp_pder_vptr);
-  }
+  cf_poly(x_vptr, a + 3, f, pder + 3 * Nx);
 
   IDL_DELTMP(x_vptr);
   IDL_DELTMP(a_vptr);
