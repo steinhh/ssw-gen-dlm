@@ -150,7 +150,7 @@ static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
   }
 }
 
-/*
+/* IDL code (-ish)
   z = (x-a(1))/a(2)
   z2 = z*z
   ix = where(z2 LT 1000.0) ;; Exp(-1000) == 0 unless quadruple precision
@@ -227,9 +227,9 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
 
   IDL_VPTR comp_args[4]; // For sending args to component
   comp_args[0] = x_vptr; // Input array
-  comp_args[1] = comp_a_vptr; // Coefficients for gauss
-  comp_args[2] = comp_f_vptr; // Output array for gauss
-  comp_args[3] = comp_pder_vptr; // Partial derivatives for gauss, optional
+  comp_args[1] = comp_a_vptr; // Coefficients
+  comp_args[2] = comp_f_vptr; // Output
+  comp_args[3] = comp_pder_vptr; // Partial derivatives, optional
 
   COMP_GAUSS(argc, comp_args, NULL); // Call COMP_GAUSS with 3 or 4 args
 
@@ -253,20 +253,47 @@ static void cf_g_p0_(int argc, IDL_VPTR Argv[], char *argk)
       }
     }
   }
+  param_off += 3; // We have added 3 params from gauss component
   IDL_DELTMP(comp_a_vptr);
+  IDL_DELTMP(comp_f_vptr);
+  if (comp_pder_vptr) {
+    IDL_DELTMP(comp_pder_vptr);
+  }
+
+  // Now call COMP_POLY
+
+  comp_f_vptr = IDL_Gettmp(); // For receiving result f from component
+  comp_pder_vptr = pder_vptr ? IDL_Gettmp() : NULL; // For receiving pder from component
 
   comp_a = make_a_vector(comp_a_vptr, 1);
   comp_a[0] = a[3];
   comp_args[0] = x_vptr; // Input array
-  comp_args[1] = a_vptr; // Coefficients for polynomial
-  comp_args[2] = f_vptr; // Output array for polynomial
-  comp_args[3] = pder_vptr; // Partial derivatives for polynomial, optional
+  comp_args[1] = comp_a_vptr; // Coefficients for polynomial
+  comp_args[2] = comp_f_vptr; // Output array for polynomial
+  comp_args[3] = comp_pder_vptr; // Partial derivatives for polynomial, optional
   COMP_POLY(argc, comp_args, NULL); // Call COMP_POLY with 3 or 4 args
 
-  // Cleanup after COMP_GAUSS (we reuse comp_f_vptr and comp_pder_vptr)
-  IDL_DELTMP(comp_a_vptr);
+  // Copy component result:
+  comp_f = (void *) comp_f_vptr->value.arr->data;
+  for (int i = 0; i < f_vptr->value.arr->n_elts; i++) {
+    f[i] += comp_f[i];
+  }
 
-  // Set up for COMP_POLY:
+  // Copy partial derivatives from comp_gauss to our pder
+  // Our pder = array[Nx,  Na], Nx = pder_dim[0] and all pder[*,i] are consecutive,
+  // i.e....
+  //   comp_pder = array[Nx, cNa], Nx = pder_dim[0] and cNa = 3 (comp. has 3 parms)
+  if (pder_vptr) {
+    double *comp_pder = (void *) comp_pder_vptr->value.arr->data;
+    for (int param = 0; param < 1; param++) {
+      for (int ix = 0; ix < pder_dim[0]; ix++) {
+        pder[ix + (param + param_off) * pder_dim[0]] = comp_pder[ix + param * pder_dim[0]];
+      }
+    }
+  }
+  param_off += 1; // We have added 1 params from comp_poly
+
+  IDL_DELTMP(comp_a_vptr);
 
   IDL_DELTMP(comp_f_vptr);
   if (comp_pder_vptr) {
