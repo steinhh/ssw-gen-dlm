@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "/Applications/NV5/idl91/external/include/idl_export.h"
+#include <idl_export.h>
 
 static void bailout(char *msg)
 {

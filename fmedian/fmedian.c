@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <export.h>
+#include <idl_export.h>
 
 #define MASK 1 /* Enable/disable keyword mask */
 #define IKWOF(a) IDL_KW_OFFSETOF(a)
