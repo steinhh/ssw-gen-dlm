@@ -1,5 +1,4 @@
-DLMS = fmedian comp_poly
-EXPORT_DIR = $(HOME)/sb/ftp-area/dlm
+DLMS = fmedian cfit
 
 all:
 	@for i in $(DLMS) ; do make -C $$i ; done
@@ -9,13 +8,6 @@ install:
 
 rounds: clean all install
 
-
-
-# clean:
-#	@for i in $(DLMS) ; do make -C $$i clean ; done
-
-
-
 clean:
 	rm -f *~ \#* Makefile.bak
 	@for i in $(DLMS) ; do make -C $$i clean ; done
@@ -23,12 +15,3 @@ clean:
 neat:
 	rm -f *~ \#*
 	@for i in $(DLMS) ; do make -C $$i neat ; done
-
-export: neat
-	rm -rf $(EXPORT_DIR) ; mkdir $(EXPORT_DIR)
-	cp -p Makefile* $(EXPORT_DIR)
-	@for i in $(DLMS) ; do (echo "cp -rp $$i $(EXPORT_DIR)" ; cp -rp $$i $(EXPORT_DIR)) ; done
-	tar cvzf $(EXPORT_DIR)/gen_dlm.tar.gz Makefile* $(DLMS)
-
-test:
-	echo "$(MAKEFLAGS)"
