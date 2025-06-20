@@ -1,8 +1,8 @@
+#include <math.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
 #include <idl_export.h>
 
 static void bailout(char *msg)
@@ -20,8 +20,8 @@ void assert_numeric(const char *description, IDL_VPTR arg)
   char msg[256];
   if (arg->type != IDL_TYP_DOUBLE && arg->type != IDL_TYP_FLOAT && arg->type != IDL_TYP_INT &&
       arg->type != IDL_TYP_UINT && arg->type != IDL_TYP_LONG && arg->type != IDL_TYP_ULONG) {
-    char msg[256];
     snprintf(msg, sizeof(msg), "%s must be numeric", description);
+    info(msg);
     bailout(msg);
   }
 }
@@ -111,7 +111,6 @@ static void COMP_POLY(int argc, IDL_VPTR Argv[], char *argk)
 /*; Use         : COMP_GAUSS,X,A,F [,PDER]*/
 static void COMP_GAUSS(int argc, IDL_VPTR Argv[], char *argk)
 {
-  char msg[256];
   check_numeric_array_params(argc, Argv);
 
   IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);
@@ -291,7 +290,6 @@ static void cf_poly(IDL_VPTR x_vptr, double *a, IDL_VPTR f_vptr, double *pder)
 
 static void cf_Ng_p0_(int argc, IDL_VPTR Argv[], int Ngauss)
 {
-  char msg[256];
   check_numeric_array_params(argc, Argv);
 
   IDL_VPTR x_vptr = IDL_CvtDbl(1, Argv);
