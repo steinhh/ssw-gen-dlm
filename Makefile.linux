@@ -5,6 +5,6 @@ F77         = f77
 
 # To make shareable objects:
 
-X_CFLAGS   = -fPIC -O3 -Wall
+X_CFLAGS   = -fPIC -O3 -Wall -Wno-missing-braces
 X_LD_FLAGS = -shared -Bsymbolic -O3
 SO_EXT = so
