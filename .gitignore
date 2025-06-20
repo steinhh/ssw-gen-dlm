@@ -1,4 +1,5 @@
 .vscode/
+.vscode/c__cpp_properties.json
 
 # Prerequisites
 *.d
